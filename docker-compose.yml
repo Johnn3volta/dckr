@@ -1,0 +1,75 @@
+version: '3'
+
+networks:
+  sensei:
+    driver: bridge
+
+services:
+
+  web:
+    build: ./docker/web
+    container_name: web
+    environment:
+      - APACHE_RUN_USER=www-data
+      - APACHE_RUN_GROUP=www-data
+    volumes:
+      - ${APP_PATH_LOCAL}:${APP_PATH_CONTAINER}
+    ports:
+      - 80:80
+    working_dir: ${APP_PATH_CONTAINER}
+
+  percona:
+    image: percona
+#    user: "1001:1001"
+    container_name: percona
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - ${PERCONA_PATH}/conf:/etc/mysql/
+      - ${PERCONA_PATH}/databases:/var/lib/mysql/  # Поменять права на локальную папку chown -R 999:999  ${PERCONA_PATH}/databases
+    networks:
+      - sensei
+    restart: unless-stopped
+
+  redis:
+    image: redis
+    container_name: redis
+    ports:
+      - 6379:6379
+    volumes:
+      - ${REDIS_PATH}:/data
+    entrypoint: redis-server --appendonly yes
+    networks:
+      - sensei
+    restart: unless-stopped
+
+  pma:
+    image: phpmyadmin/phpmyadmin:latest
+    container_name: phpmydamin
+    networks:
+      - sensei
+    ports:
+      - 6080:80
+      - 6043:443
+    environment:
+      PMA_USER: "root"
+      PMA_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      PMA_HOSTS: "percona"
+    links:
+      - percona
+    depends_on:
+      - percona
+    restart: unless-stopped
+
+  composer:
+    image: composer:1.6
+    container_name: composer
+    networks:
+      - sensei
+    volumes:
+      - ${APP_PATH_LOCAL}:${APP_PATH_CONTAINER}
+    working_dir: ${APP_PATH_CONTAINER}
+#    command: composer install
